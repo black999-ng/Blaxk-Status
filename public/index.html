@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>StatusFix — WhatsApp Quality Optimizer</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0a;
+    --surface: #111111;
+    --border: #222222;
+    --green: #00e676;
+    --green-dim: #00e67615;
+    --green-border: #00e67640;
+    --text: #f0f0f0;
+    --muted: #555;
+    --danger: #ff4d4d;
+    --warn: #8bc34a;
+    --warn-bg: #0d1a00;
+    --warn-border: #3d6b00;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px 80px;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,230,118,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,230,118,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 640px;
+  }
+
+  header { margin-bottom: 48px; text-align: center; }
+
+  .badge {
+    display: inline-block;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    color: var(--green);
+    border: 1px solid var(--green);
+    padding: 4px 10px;
+    border-radius: 2px;
+    margin-bottom: 20px;
+    text-transform: uppercase;
+  }
+
+  h1 {
+    font-size: clamp(2.2rem, 6vw, 3.5rem);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+  }
+  h1 span { color: var(--green); }
+
+  .subtitle {
+    margin-top: 12px;
+    color: var(--muted);
+    font-size: 14px;
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 0.02em;
+  }
+
+  /* FFmpeg loader */
+  .ffmpeg-loader {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .loader-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    flex-shrink: 0;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.3; transform: scale(0.8); }
+  }
+  .loader-dot.ready { animation: none; background: var(--green); }
+  .loader-dot.error { animation: none; background: var(--danger); }
+
+  .loader-text {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .loader-text strong { color: var(--text); }
+
+  /* Drop zone */
+  .dropzone {
+    border: 1.5px dashed var(--border);
+    border-radius: 12px;
+    padding: 56px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+    overflow: hidden;
+    background: var(--surface);
+  }
+  .dropzone:hover, .dropzone.drag-over {
+    border-color: var(--green);
+    background: var(--green-dim);
+  }
+  .dropzone input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+  .drop-icon { font-size: 40px; margin-bottom: 16px; display: block; line-height: 1; }
+  .drop-title { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+  .drop-sub { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); letter-spacing: 0.05em; }
+
+  /* Preview */
+  .preview-section { margin-top: 28px; display: none; }
+  .preview-section.visible { display: block; }
+
+  .file-info {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .file-thumb {
+    width: 52px; height: 52px;
+    border-radius: 6px;
+    object-fit: cover;
+    background: var(--border);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    overflow: hidden;
+  }
+  .file-thumb img, .file-thumb video { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; }
+  .file-meta { flex: 1; min-width: 0; }
+  .file-name { font-weight: 700; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-size { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .remove-btn {
+    background: none; border: none; color: var(--muted);
+    cursor: pointer; font-size: 18px; padding: 4px; transition: color 0.15s;
+  }
+  .remove-btn:hover { color: var(--danger); }
+
+  /* Settings */
+  .settings {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .settings-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .setting-row:last-child { border-bottom: none; padding-bottom: 0; }
+  .setting-label { font-size: 13px; font-weight: 700; }
+  .setting-desc { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .setting-value {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--green);
+    background: var(--green-dim);
+    border: 1px solid var(--green-border);
+    padding: 3px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    margin-left: 12px;
+  }
+
+  /* Process button */
+  .process-btn {
+    width: 100%;
+    background: var(--green);
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    padding: 16px;
+    font-family: 'Syne', sans-serif;
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    text-transform: uppercase;
+  }
+  .process-btn:hover { opacity: 0.88; transform: translateY(-1px); }
+  .process-btn:active { transform: translateY(0); }
+  .process-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+  /* Progress */
+  .progress-section { margin-top: 24px; display: none; }
+  .progress-section.visible { display: block; }
+
+  .progress-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .progress-bar-bg { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .progress-bar-fill {
+    height: 100%;
+    background: var(--green);
+    border-radius: 2px;
+    transition: width 0.4s ease;
+    width: 0%;
+  }
+  .status-msg {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 10px;
+    min-height: 18px;
+  }
+
+  /* Log */
+  .log-box {
+    background: #000;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    margin-top: 14px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10.5px;
+    color: #444;
+    max-height: 100px;
+    overflow-y: auto;
+    line-height: 1.6;
+    display: none;
+  }
+  .log-box.visible { display: block; }
+  .log-line { color: #3a3a3a; }
+  .log-line.active { color: var(--green); }
+
+  /* Result */
+  .result-section { margin-top: 28px; display: none; }
+  .result-section.visible { display: block; }
+
+  .result-card {
+    background: var(--green-dim);
+    border: 1px solid var(--green-border);
+    border-radius: 12px;
+    padding: 28px 24px;
+    text-align: center;
+  }
+  .result-icon { font-size: 36px; margin-bottom: 12px; }
+  .result-title { font-size: 20px; font-weight: 800; margin-bottom: 6px; }
+  .result-stats { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 24px; }
+  .result-stats span { color: var(--green); }
+
+  .download-btn {
+    display: inline-block;
+    background: var(--green);
+    color: #000;
+    text-decoration: none;
+    border-radius: 6px;
+    padding: 12px 28px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 14px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    transition: opacity 0.15s;
+  }
+  .download-btn:hover { opacity: 0.85; }
+
+  .reset-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 6px;
+    padding: 12px 20px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    margin-left: 12px;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .reset-btn:hover { border-color: var(--text); color: var(--text); }
+
+  .error-box {
+    background: #1a0000;
+    border: 1px solid var(--danger);
+    border-radius: 8px;
+    padding: 14px 18px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--danger);
+    margin-top: 16px;
+    display: none;
+    line-height: 1.6;
+  }
+  .error-box.visible { display: block; }
+
+  footer {
+    margin-top: 60px;
+    text-align: center;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: #2a2a2a;
+    letter-spacing: 0.05em;
+  }
+
+  canvas { display: none; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="badge">WhatsApp Status Fix</div>
+    <h1>Status<span>Fix</span></h1>
+    <p class="subtitle">// real h.264. zero server uploads. full quality.</p>
+  </header>
+
+  <!-- FFmpeg status -->
+  <div class="ffmpeg-loader" id="ffmpegLoader">
+    <div class="loader-dot" id="loaderDot"></div>
+    <div class="loader-text" id="loaderText"><strong>Loading FFmpeg...</strong> (~30MB, one-time download)</div>
+  </div>
+
+  <!-- Drop Zone -->
+  <div class="dropzone" id="dropzone">
+  <input type="file" id="fileInput" accept="image/*,video/*" />
+  <span class="drop-icon">📁</span>
+    <div class="drop-title">Drop your image or video here</div>
+    <div class="drop-sub">JPEG · PNG · MP4 · MOV · WEBM — max 500MB</div>
+  </div>
+
+  <!-- Preview -->
+  <div class="preview-section" id="previewSection">
+    <div class="file-info">
+      <div class="file-thumb" id="fileThumbnail"></div>
+      <div class="file-meta">
+        <div class="file-name" id="fileName"></div>
+        <div class="file-size" id="fileSize"></div>
+      </div>
+      <button class="remove-btn" id="removeBtn" title="Remove">✕</button>
+    </div>
+
+    <div class="settings" id="settingsPanel"></div>
+    <div class="error-box" id="errorBox"></div>
+    <br />
+    <button class="process-btn" id="processBtn" disabled>Waiting for FFmpeg...</button>
+  </div>
+
+  <!-- Progress -->
+  <div class="progress-section" id="progressSection">
+    <div class="progress-label">
+      <span id="progressStatus">Processing...</span>
+      <span id="progressPct">0%</span>
+    </div>
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill" id="progressFill"></div>
+    </div>
+    <div class="status-msg" id="statusMsg"></div>
+    <div class="log-box" id="logBox"></div>
+  </div>
+
+  <!-- Result -->
+  <div class="result-section" id="resultSection">
+    <div class="result-card">
+      <div class="result-icon">✅</div>
+      <div class="result-title">Ready for WhatsApp</div>
+      <div class="result-stats" id="resultStats"></div>
+      <a class="download-btn" id="downloadBtn" href="#" download>Download File</a>
+      <button class="reset-btn" id="resetBtn">Process Another</button>
+    </div>
+  </div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<footer>processed entirely in your browser — files never leave your device</footer>
+
+<!-- FFmpeg.wasm v0.12 (stable, widely supported) -->
+<script src="/ffmpeg/ffmpeg.js"></script>
+<script src="/ffmpeg/util.js"></script>
+
+<script>
+const { FFmpeg } = FFmpegWASM;
+const { fetchFile, toBlobURL } = FFmpegUtil;
+
+let ffmpeg = null;
+let ffmpegReady = false;
+let currentFile = null;
+let outputUrl = null;
+let videoDuration = 0;
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+// --- DOM refs ---
+const dropzone      = document.getElementById('dropzone');
+const fileInput     = document.getElementById('fileInput');
+const previewSection= document.getElementById('previewSection');
+const progressSection=document.getElementById('progressSection');
+const resultSection = document.getElementById('resultSection');
+const processBtn    = document.getElementById('processBtn');
+const removeBtn     = document.getElementById('removeBtn');
+const resetBtn      = document.getElementById('resetBtn');
+const errorBox      = document.getElementById('errorBox');
+const loaderDot     = document.getElementById('loaderDot');
+const loaderText    = document.getElementById('loaderText');
+const logBox        = document.getElementById('logBox');
+
+// --- Load FFmpeg ---
+async function loadFFmpeg() {
+  try {
+    ffmpeg = new FFmpeg();
+
+    ffmpeg.on('log', ({ message }) => {
+      appendLog(message);
+      // Parse progress from FFmpeg output
+      const timeMatch = message.match(/time=(\d+):(\d+):(\d+\.\d+)/);
+      if (timeMatch && videoDuration > 0) {
+        const h = parseInt(timeMatch[1]);
+        const m = parseInt(timeMatch[2]);
+        const s = parseFloat(timeMatch[3]);
+        const elapsed = h * 3600 + m * 60 + s;
+        const pct = Math.min((elapsed / videoDuration) * 85, 85);
+        setProgress(10 + pct, `Encoding... ${elapsed.toFixed(1)}s / ${videoDuration.toFixed(1)}s`);
+      }
+    });
+
+    ffmpeg.on('progress', ({ progress }) => {
+      if (progress > 0) {
+        setProgress(10 + progress * 85, `Encoding... ${Math.round(progress * 100)}%`);
+      }
+    });
+
+
+    // Load from self-hosted files (same origin)
+    const base = '/ffmpeg';
+    await ffmpeg.load({
+      coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, 'text/javascript'),
+      wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm'),
+    });
+
+    ffmpegReady = true;
+    loaderDot.classList.add('ready');
+    loaderText.innerHTML = '<strong>FFmpeg ready</strong> — H.264 encoding available';
+
+    if (currentFile) {
+      processBtn.disabled = false;
+      processBtn.textContent = 'Optimize for WhatsApp Status →';
+    }
+  } catch (err) {
+    loaderDot.classList.add('error');
+    loaderText.innerHTML = `<strong style="color:var(--danger)">FFmpeg failed to load</strong> — image optimization still works`;
+    console.error('FFmpeg load error:', err);
+    // Still allow image processing
+    ffmpegReady = false;
+    if (currentFile && currentFile.type.startsWith('image/')) {
+      processBtn.disabled = false;
+      processBtn.textContent = 'Optimize for WhatsApp Status →';
+    }
+  }
+}
+
+loadFFmpeg();
+
+// --- Drag & drop ---
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+removeBtn.addEventListener('click', resetAll);
+resetBtn.addEventListener('click', resetAll);
+processBtn.addEventListener('click', processFile);
+
+function handleFile(file) {
+  const isImage = file.type.startsWith('image/');
+  const isVideo = file.type.startsWith('video/');
+  if (!isImage && !isVideo) {
+    showError('Unsupported file type. Please use JPEG, PNG, MP4, MOV, or WEBM.');
+    return;
+  }
+
+  currentFile = file;
+  document.getElementById('fileName').textContent = file.name;
+  document.getElementById('fileSize').textContent = formatSize(file.size);
+
+  const thumb = document.getElementById('fileThumbnail');
+  const url = URL.createObjectURL(file);
+
+  if (isImage) {
+    thumb.innerHTML = `<img src="${url}" alt="preview" />`;
+    buildImageSettings();
+    if (ffmpegReady || true) { // images don't need ffmpeg
+      processBtn.disabled = false;
+      processBtn.textContent = 'Optimize for WhatsApp Status →';
+    }
+  } else {
+    thumb.innerHTML = `<video src="${url}" muted></video>`;
+    buildVideoSettings();
+    if (ffmpegReady) {
+      processBtn.disabled = false;
+      processBtn.textContent = 'Optimize for WhatsApp Status →';
+    } else {
+      processBtn.disabled = true;
+      processBtn.textContent = 'Waiting for FFmpeg...';
+    }
+  }
+
+  hideError();
+  previewSection.classList.add('visible');
+  resultSection.classList.remove('visible');
+  progressSection.classList.remove('visible');
+}
+
+function buildImageSettings() {
+  document.getElementById('settingsPanel').innerHTML = `
+    <div class="settings-title">// optimization target — image</div>
+    <div class="setting-row">
+      <div><div class="setting-label">Max resolution</div><div class="setting-desc">WhatsApp crops above this</div></div>
+      <div class="setting-value">1600 × 1600px</div>
+    </div>
+    <div class="setting-row">
+      <div><div class="setting-label">Format & quality</div><div class="setting-desc">WA uses ~80%, we use 94%</div></div>
+      <div class="setting-value">JPEG · 94%</div>
+    </div>
+    <div class="setting-row">
+      <div><div class="setting-label">Engine</div><div class="setting-desc">Canvas API, instant</div></div>
+      <div class="setting-value">Browser native</div>
+    </div>
+  `;
+}
+
+function buildVideoSettings() {
+  document.getElementById('settingsPanel').innerHTML = `
+    <div class="settings-title">// optimization target — video</div>
+    <div class="setting-row">
+      <div><div class="setting-label">Codec</div><div class="setting-desc">What WA actually wants</div></div>
+      <div class="setting-value">H.264 / MP4</div>
+    </div>
+    <div class="setting-row">
+      <div><div class="setting-label">Max resolution</div><div class="setting-desc">Downscale only if needed</div></div>
+      <div class="setting-value">1080p max</div>
+    </div>
+    <div class="setting-row">
+      <div><div class="setting-label">Bitrate</div><div class="setting-desc">High quality, reasonable size</div></div>
+      <div class="setting-value">3 Mbps CRF 23</div>
+    </div>
+    <div class="setting-row">
+      <div><div class="setting-label">Engine</div><div class="setting-desc">Real FFmpeg in your browser</div></div>
+      <div class="setting-value">FFmpeg.wasm</div>
+    </div>
+  `;
+}
+
+async function processFile() {
+  if (!currentFile) return;
+  processBtn.disabled = true;
+  resultSection.classList.remove('visible');
+  progressSection.classList.add('visible');
+  logBox.innerHTML = '';
+  hideError();
+
+  try {
+    if (currentFile.type.startsWith('image/')) {
+      await processImage();
+    } else {
+      await processVideo();
+    }
+  } catch (err) {
+    showError('Processing failed: ' + err.message + '\n\nTry a smaller file or refresh the page.');
+    progressSection.classList.remove('visible');
+    processBtn.disabled = false;
+  }
+}
+
+// --- Image processing (Canvas API) ---
+async function processImage() {
+  setProgress(10, 'Loading image...');
+  const img = await loadImage(currentFile);
+  setProgress(40, 'Resizing...');
+
+  const MAX = 1600;
+  let w = img.naturalWidth, h = img.naturalHeight;
+  if (w > MAX || h > MAX) {
+    const scale = Math.min(MAX / w, MAX / h);
+    w = Math.round(w * scale);
+    h = Math.round(h * scale);
+  }
+
+  canvas.width = w;
+  canvas.height = h;
+  ctx.drawImage(img, 0, 0, w, h);
+  setProgress(75, 'Encoding JPEG at 94% quality...');
+
+  const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.94));
+  setProgress(100, 'Done!');
+
+  finalize(blob, '.jpg', currentFile.size, blob.size, `${w}×${h}`);
+}
+
+// --- Video processing (FFmpeg.wasm — real H.264) ---
+async function processVideo() {
+  if (!ffmpegReady) throw new Error('FFmpeg not loaded yet. Please wait.');
+
+  logBox.classList.add('visible');
+  setProgress(2, 'Reading video file...');
+
+  // Get video dimensions
+  const { w, h, duration } = await getVideoDimensions(currentFile);
+  videoDuration = duration;
+
+  const MAX = 1080;
+  let outW = w, outH = h;
+  if (outW > MAX || outH > MAX) {
+    const scale = Math.min(MAX / outW, MAX / outH);
+    outW = Math.round(outW * scale) & ~1;
+    outH = Math.round(outH * scale) & ~1;
+  } else {
+    // Ensure even dimensions
+    outW = outW & ~1;
+    outH = outH & ~1;
+  }
+
+  setProgress(5, 'Writing to FFmpeg virtual filesystem...');
+  const inputName = 'input' + getExtension(currentFile.name);
+  const outputName = 'output.mp4';
+
+  await ffmpeg.writeFile(inputName, await fetchFile(currentFile));
+  setProgress(10, `Encoding ${outW}×${outH} H.264 MP4...`);
+
+  // FFmpeg command: H.264, CRF 23 (high quality), fast preset, AAC audio
+  await ffmpeg.exec([
+    '-i', inputName,
+    '-vf', `scale=${outW}:${outH}`,
+    '-c:v', 'libx264',
+    '-crf', '23',
+    '-preset', 'fast',
+    '-c:a', 'aac',
+    '-b:a', '128k',
+    '-movflags', '+faststart',
+    '-y',
+    outputName
+  ]);
+
+  setProgress(96, 'Reading output...');
+  const data = await ffmpeg.readFile(outputName);
+  const blob = new Blob([data.buffer], { type: 'video/mp4' });
+
+  // Cleanup
+  await ffmpeg.deleteFile(inputName);
+  await ffmpeg.deleteFile(outputName);
+
+  setProgress(100, 'Done!');
+  logBox.classList.remove('visible');
+  finalize(blob, '.mp4', currentFile.size, blob.size, `${outW}×${outH}`);
+}
+
+function finalize(blob, ext, origSize, newSize, resolution) {
+  if (outputUrl) URL.revokeObjectURL(outputUrl);
+  outputUrl = URL.createObjectURL(blob);
+
+  const baseName = currentFile.name.replace(/\.[^.]+$/, '');
+  const dl = document.getElementById('downloadBtn');
+  dl.href = outputUrl;
+  dl.download = `${baseName}_statusfix${ext}`;
+
+  const diff = origSize - newSize;
+  const savings = diff > 0
+    ? `saved <span>${formatSize(diff)}</span>`
+    : `<span>+${formatSize(-diff)}</span> (better quality preserved)`;
+
+  document.getElementById('resultStats').innerHTML =
+    `${formatSize(origSize)} → <span>${formatSize(newSize)}</span> &nbsp;·&nbsp; ${resolution} &nbsp;·&nbsp; ${savings}`;
+
+  progressSection.classList.remove('visible');
+  resultSection.classList.add('visible');
+  processBtn.disabled = false;
+  processBtn.textContent = 'Optimize for WhatsApp Status →';
+}
+
+// --- Utilities ---
+function loadImage(file) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => res(img);
+    img.onerror = rej;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+function getVideoDimensions(file) {
+  return new Promise((res, rej) => {
+    const v = document.createElement('video');
+    v.preload = 'metadata';
+    v.onloadedmetadata = () => res({
+      w: v.videoWidth,
+      h: v.videoHeight,
+      duration: v.duration
+    });
+    v.onerror = rej;
+    v.src = URL.createObjectURL(file);
+  });
+}
+
+function getExtension(filename) {
+  const m = filename.match(/\.[^.]+$/);
+  return m ? m[0].toLowerCase() : '.mp4';
+}
+
+function setProgress(pct, label) {
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressPct').textContent = Math.round(pct) + '%';
+  document.getElementById('statusMsg').textContent = label;
+}
+
+function appendLog(msg) {
+  if (!msg.trim()) return;
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  line.textContent = msg;
+  logBox.appendChild(line);
+  logBox.scrollTop = logBox.scrollHeight;
+  // Highlight last line
+  [...logBox.querySelectorAll('.log-line')].forEach(l => l.classList.remove('active'));
+  line.classList.add('active');
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+}
+
+function showError(msg) {
+  errorBox.textContent = '⚠ ' + msg;
+  errorBox.classList.add('visible');
+}
+function hideError() { errorBox.classList.remove('visible'); }
+
+function resetAll() {
+  currentFile = null;
+  videoDuration = 0;
+  if (outputUrl) { URL.revokeObjectURL(outputUrl); outputUrl = null; }
+  fileInput.value = '';
+  previewSection.classList.remove('visible');
+  progressSection.classList.remove('visible');
+  resultSection.classList.remove('visible');
+  logBox.innerHTML = '';
+  logBox.classList.remove('visible');
+  hideError();
+  processBtn.disabled = !ffmpegReady;
+  processBtn.textContent = ffmpegReady ? 'Optimize for WhatsApp Status →' : 'Waiting for FFmpeg...';
+  document.getElementById('settingsPanel').innerHTML = '';
+}
+</script>
+</body>
+</html>
