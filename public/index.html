@@ -429,8 +429,8 @@
 <footer>processed entirely in your browser — files never leave your device</footer>
 
 <!-- FFmpeg.wasm v0.12 (stable, widely supported) -->
-<script src="/ffmpeg/ffmpeg.js"></script>
-<script src="/ffmpeg/util.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/umd/index.js" crossorigin="anonymous"></script>
 
 <script>
 const { FFmpeg } = FFmpegWASM;
@@ -466,7 +466,6 @@ async function loadFFmpeg() {
 
     ffmpeg.on('log', ({ message }) => {
       appendLog(message);
-      // Parse progress from FFmpeg output
       const timeMatch = message.match(/time=(\d+):(\d+):(\d+\.\d+)/);
       if (timeMatch && videoDuration > 0) {
         const h = parseInt(timeMatch[1]);
@@ -484,12 +483,11 @@ async function loadFFmpeg() {
       }
     });
 
-
-    // Load from self-hosted files (same origin)
-    const base = '/ffmpeg';
+    // ✅ Load core from local URLs (avoids CORS issues with localhost)
     await ffmpeg.load({
-      coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm'),
+      classWorkerURL: '/ffmpeg/814.ffmpeg.js',
+      coreURL: '/ffmpeg/ffmpeg-core.js',
+      wasmURL: '/ffmpeg/ffmpeg-core.wasm',
     });
 
     ffmpegReady = true;
@@ -504,7 +502,6 @@ async function loadFFmpeg() {
     loaderDot.classList.add('error');
     loaderText.innerHTML = `<strong style="color:var(--danger)">FFmpeg failed to load</strong> — image optimization still works`;
     console.error('FFmpeg load error:', err);
-    // Still allow image processing
     ffmpegReady = false;
     if (currentFile && currentFile.type.startsWith('image/')) {
       processBtn.disabled = false;
