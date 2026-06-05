@@ -483,11 +483,14 @@ async function loadFFmpeg() {
       }
     });
 
-    // ✅ Load core from local URLs (avoids CORS issues with localhost)
+    // ✅ Load core from jsdelivr CDN and wrap files in Blob URLs to satisfy Worker same-origin requirements
+    const baseFFmpeg = 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd';
+    const baseCore = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd';
+
     await ffmpeg.load({
-      classWorkerURL: '/ffmpeg/814.ffmpeg.js',
-      coreURL: '/ffmpeg/ffmpeg-core.js',
-      wasmURL: '/ffmpeg/ffmpeg-core.wasm',
+      classWorkerURL: await toBlobURL(`${baseFFmpeg}/814.ffmpeg.js`, 'text/javascript'),
+      coreURL: await toBlobURL(`${baseCore}/ffmpeg-core.js`, 'text/javascript'),
+      wasmURL: await toBlobURL(`${baseCore}/ffmpeg-core.wasm`, 'application/wasm'),
     });
 
     ffmpegReady = true;
