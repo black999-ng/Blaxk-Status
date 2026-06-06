@@ -433,8 +433,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/umd/index.js" crossorigin="anonymous"></script>
 
 <script>
-const { FFmpeg } = FFmpegWASM;
-const { fetchFile, toBlobURL } = FFmpegUtil;
+const { FFmpeg } = FFmpegWasm;
+const { toBlobURL } = FFmpegUtil;
 
 let ffmpeg = null;
 let ffmpegReady = false;
@@ -483,14 +483,12 @@ async function loadFFmpeg() {
       }
     });
 
-    // ✅ Load core from jsdelivr CDN and wrap files in Blob URLs to satisfy Worker same-origin requirements
-    const baseFFmpeg = 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd';
-    const baseCore = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd';
-
+ // Load matching UMD core assets from the official unpkg CDN
+    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd';
+    
     await ffmpeg.load({
-      classWorkerURL: await toBlobURL(`${baseFFmpeg}/814.ffmpeg.js`, 'text/javascript'),
-      coreURL: await toBlobURL(`${baseCore}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${baseCore}/ffmpeg-core.wasm`, 'application/wasm'),
+      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
     });
 
     ffmpegReady = true;
@@ -682,7 +680,7 @@ async function processVideo() {
   const inputName = 'input' + getExtension(currentFile.name);
   const outputName = 'output.mp4';
 
-  await ffmpeg.writeFile(inputName, await fetchFile(currentFile));
+  await ffmpeg.writeFile(inputName, currentFile);
   setProgress(10, `Encoding ${outW}×${outH} H.264 MP4...`);
 
   // FFmpeg command: H.264, CRF 23 (high quality), fast preset, AAC audio
