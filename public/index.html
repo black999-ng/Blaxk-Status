@@ -429,14 +429,16 @@
 <footer>processed entirely in your browser — files never leave your device</footer>
 
 <!-- FFmpeg.wasm v0.12 (stable, widely supported) -->
-<script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/umd/index.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.umd.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js" crossorigin="anonymous"></script>
 
 <script>
-const { FFmpeg } = FFmpegWasm;
+// The unpkg bundle exposes the global object under this exact casing
+const { FFmpeg } = FFmpegWASM;
 const { toBlobURL } = FFmpegUtil;
 
-let ffmpeg = null;
+const ffmpeg = new FFmpeg();
+let ffmpegLoaded = false;
 let ffmpegReady = false;
 let currentFile = null;
 let outputUrl = null;
@@ -461,53 +463,36 @@ const logBox        = document.getElementById('logBox');
 
 // --- Load FFmpeg ---
 async function loadFFmpeg() {
+  if (ffmpegLoaded) return;
   try {
-    ffmpeg = new FFmpeg();
-
-    ffmpeg.on('log', ({ message }) => {
-      appendLog(message);
-      const timeMatch = message.match(/time=(\d+):(\d+):(\d+\.\d+)/);
-      if (timeMatch && videoDuration > 0) {
-        const h = parseInt(timeMatch[1]);
-        const m = parseInt(timeMatch[2]);
-        const s = parseFloat(timeMatch[3]);
-        const elapsed = h * 3600 + m * 60 + s;
-        const pct = Math.min((elapsed / videoDuration) * 85, 85);
-        setProgress(10 + pct, `Encoding... ${elapsed.toFixed(1)}s / ${videoDuration.toFixed(1)}s`);
-      }
-    });
-
-    ffmpeg.on('progress', ({ progress }) => {
-      if (progress > 0) {
-        setProgress(10 + progress * 85, `Encoding... ${Math.round(progress * 100)}%`);
-      }
-    });
-
- // Load matching UMD core assets from the official unpkg CDN
-    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd';
+    appendLog("Initializing FFmpeg components via Cloudflare edge...");
+    
+    // Core ESM directory on unpkg
+    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm';
     
     await ffmpeg.load({
       coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
       wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+      // Pulls the worker script from unpkg and wraps it safely in a local Blob
+      classWorkerURL: await toBlobURL('https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/814.ffmpeg.js', 'text/javascript')
     });
 
+    ffmpegLoaded = true;
     ffmpegReady = true;
-    loaderDot.classList.add('ready');
-    loaderText.innerHTML = '<strong>FFmpeg ready</strong> — H.264 encoding available';
-
+    appendLog("FFmpeg Core successfully compiled and ready.");
+    
+    const dot = document.getElementById('loaderDot');
+    if (dot) dot.style.background = 'var(--green)';
+    document.getElementById('statusMsg').textContent = 'Ready to optimize';
+    
     if (currentFile) {
       processBtn.disabled = false;
       processBtn.textContent = 'Optimize for WhatsApp Status →';
     }
   } catch (err) {
-    loaderDot.classList.add('error');
-    loaderText.innerHTML = `<strong style="color:var(--danger)">FFmpeg failed to load</strong> — image optimization still works`;
-    console.error('FFmpeg load error:', err);
-    ffmpegReady = false;
-    if (currentFile && currentFile.type.startsWith('image/')) {
-      processBtn.disabled = false;
-      processBtn.textContent = 'Optimize for WhatsApp Status →';
-    }
+    console.error("FFmpeg Load Error:", err);
+    appendLog("Failed to initialize engine.");
+    showError("Could not load processing components: " + err.message);
   }
 }
 
